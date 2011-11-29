@@ -1,115 +1,126 @@
 #+title: The C programming language, aka K&R
-#+category: reading
 
-* Support
-** TODO Feeding Raw text to the blocks STDIN
-#+begin_src emacs-lisp :tangle no
-(defun org-babel-C-execute (body params)
-  "This function should only be called by `org-babel-execute:C'
-or `org-babel-execute:c++'."
-  (let* ((processed-params (org-babel-process-params params))
-         (tmp-src-file (make-temp-file "org-babel-C-src" nil
-                                       (cond
-                                        ((equal org-babel-c-variant 'c) ".c")
-                                        ((equal org-babel-c-variant 'cpp) ".cpp"))))
-         (tmp-bin-file (make-temp-file "org-babel-C-bin"))
-         (tmp-out-file (make-temp-file "org-babel-C-out"))
-         (cmdline (cdr (assoc :cmdline params)))
-         (feed (cdr (assoc :feed params)))
-         (feed-file (cdr (assoc :feed-file params)))
-         (flags (cdr (assoc :flags params)))
-         (full-body (org-babel-C-expand body params))
-         (compile
-          (progn
-            (with-temp-file tmp-src-file (insert full-body))
-            (org-babel-eval
-             (format "%s -o %s %s %s"
-                     (cond
-                      ((equal org-babel-c-variant 'c) org-babel-C-compiler)
-                      ((equal org-babel-c-variant 'cpp) org-babel-c++-compiler))
-                     tmp-bin-file
-                     (mapconcat 'identity
-                                (if (listp flags) flags (list flags)) " ")
-                     tmp-src-file) ""))))
-    ((lambda (results)
-       (org-babel-reassemble-table
-        (if (member "vector" (nth 2 processed-params))
-            (let ((tmp-file (make-temp-file "ob-c")))
-              (with-temp-file tmp-file (insert results))
-              (org-babel-import-elisp-from-file tmp-file))
-          (org-babel-read results))
-        (org-babel-pick-name
-         (nth 4 processed-params) (cdr (assoc :colnames params)))
-        (org-babel-pick-name
-         (nth 5 processed-params) (cdr (assoc :rownames params)))))
-     (org-babel-trim
-      (org-babel-eval
-       (concat (or (if feed (concat "echo \"" feed "\" | "))
-                   (if feed-file (concat "cat " feed-file " | ")))
-               tmp-bin-file
-               (if cmdline (concat " " cmdline) "")) "")))))
+
+* Prerequisites
+** Redefined =org-babel-C-execute=
+
+In order to feed raw text to the blocks STDIN while they are executed,
+*a new header argument :cat is defined*.
+
+Its purpose is to provide a relative path to a text file, whose
+contents will be piped into the src block's executable when at
+runtime.
+
+#+begin_src emacs-lisp
+  (defun org-babel-C-execute (body params)
+    "This function should only be called by `org-babel-execute:C'
+  or `org-babel-execute:C++'."
+    (let* ((tmp-src-file (org-babel-temp-file
+                          "C-src-"
+                          (cond
+                           ((equal org-babel-c-variant 'c) ".c")
+                           ((equal org-babel-c-variant 'cpp) ".cpp"))))
+           (tmp-bin-file (org-babel-temp-file "C-bin-"))
+  ;; +
+           (cat (cdr (assoc :cat params)))
+           (cmdline (cdr (assoc :cmdline params)))
+           (flags (cdr (assoc :flags params)))
+           (full-body (org-babel-C-expand body params))
+           (compile
+            (progn
+              (with-temp-file tmp-src-file (insert full-body))
+              (org-babel-eval
+               (format "%s -o %s %s %s"
+                       (cond
+                        ((equal org-babel-c-variant 'c) org-babel-C-compiler)
+                        ((equal org-babel-c-variant 'cpp) org-babel-C++-compiler))
+                       (org-babel-process-file-name tmp-bin-file)
+                       (mapconcat 'identity
+                                  (if (listp flags) flags (list flags)) " ")
+                       (org-babel-process-file-name tmp-src-file)) ""))))
+      ((lambda (results)
+         (org-babel-reassemble-table
+          (if (member "vector" (cdr (assoc :result-params params)))
+              (let ((tmp-file (org-babel-temp-file "c-")))
+                (with-temp-file tmp-file (insert results))
+                (org-babel-import-elisp-from-file tmp-file))
+            (org-babel-read results))
+          (org-babel-pick-name
+           (cdr (assoc :colname-names params)) (cdr (assoc :colnames params)))
+          (org-babel-pick-name
+           (cdr (assoc :rowname-names params)) (cdr (assoc :rownames params)))))
+       (org-babel-trim
+  ;; +++
+        (org-babel-eval (concat (if cat (concat "cat " cat " | " ) "")
+                                tmp-bin-file
+                                (if cmdline (concat " " cmdline) ""))
+                        "")))))
+  
+  (org-babel-do-load-languages
+   'org-babel-load-languages
+   '((emacs-lisp . t)
+     (C . t)))
+  
+  ;; Convenience settings
+  ;;
+  (setq org-confirm-babel-evaluate nil)
+  (define-key c-mode-map (kbd "C-c C-v") 'org-babel-detangle)
 #+end_src
 
-** TODO Fix indentation of the first line in result blocks
-** TODO Find a way to pipe in blocks of text to prevent using actual files for input
 * Chapters
+#+Properties: :mkdirp yes
 #+Properties: :cache yes
 #+Properties: :results both
 #+Properties: :results replace
 #+Properties: :main no
 #+Properties: :comments both
-#+Properties: :mkdirp yes
+#+Properties: :padline no
 
 ** Chapter 1
-#+Properties: :tangle (concat "chapter1/" (downcase (nth 4 (org-heading-components))) ".c")
 *** 1.1 Getting started
 **** Exercise1-1A
 
 Run the "hello, world" program on your system.
 
-#+begin_src c
-int main() {
-#include <stdio.h>
-
-    main()
-    {
-        printf("hello, world\n");
-    }
-
-}
+#+begin_src C :tangle exercises/1-01a.c
+  #include <stdio.h>
+  
+  int main()
+  {
+      printf("hello, world\n");
+  }
 #+end_src
+
+#+results[8e6bcb4e09c1f8e8b2277cf3c341d95f437a7194]:
+: hello, world
 
 **** Exercise1-1B
 
 Experiment with leaving out parts of the program, to see what error messages you
 get.
 
-#+begin_src c
-int main() {
-#include <stdio.h>
-
-    main()
-    {
-        printf("hello, world\n")
-    }
-
-}
+#+begin_src C :tangle exercises/1-01b.c
+  #include <stdio.h>
+  
+  main()
+  {
+      printf("hello, world\n")
+  }
 #+end_src
 
-#+results:
-: error: expected `;' before '}' token
+#+results[a2f52ca89bf77c184ef5e49955e035607ae151e4]:
 
 **** Exercise1-2
 
 Experiment to find out what happens when prints's argument string contains \c.
 
-#+begin_src c
-#include <stdio.h>
-
-main()
-{
-    printf("hello, world\w");
-}
+#+begin_src C exercises/1-02.c
+  #include <stdio.h>
+  
+  main()
+  {
+      printf("hello, world\w");
+  }
 #+end_src
 
 #+results:
@@ -120,23 +131,24 @@ main()
 
 Modify the temperature conversion program to print a heading above the table.
 
-#+begin_src c
-#include <stdio.h>
-/* print Fahrenheit-Celsius table for fahr = 0, 20, ..., 300; floating-point version */
-main() {
-    float fahr, celsius; float lower, upper, step;
-    lower = 0; upper = 300; step = 20;
-    fahr = lower;
-    printf("%3s |%7s\n%s\n", "Cel", "Fahr", "-----------");
-    while (fahr <= upper) {
-        celsius = (5.0/9.0) * (fahr-32.0);
-        printf("%3.0f |%6.1f\n", fahr, celsius);
-        fahr = fahr + step;
-    }
-}
+#+begin_src C :tangle exercises/1-03.c
+  #include <stdio.h>
+  /* print Fahrenheit-Celsius table for fahr = 0, 20, ..., 300; floating-point version */
+  main()
+  {
+      float fahr, celsius; float lower, upper, step;
+      lower = 0; upper = 300; step = 20;
+      fahr = lower;
+      printf("%3s |%7s\n%s\n", "Cel", "Fahr", "-----------");
+      while (fahr <= upper) {
+          celsius = (5.0/9.0) * (fahr-32.0);
+          printf("%3.0f |%6.1f\n", fahr, celsius);
+          fahr = fahr + step;
+      }
+  }
 #+end_src
 
-#+results:
+#+results[eb5c5b686559d6f1e07878639daf3100049a47ac]:
 #+begin_example
 Cel |   Fahr
 -----------
@@ -158,26 +170,67 @@ Cel |   Fahr
 300 | 148.9
 #+end_example
 
-**** TODO Exerice1-4
+**** TODO Exercise1-4
 
 Write a program to print the corresponding Celsius to Fahrenheit table.
 
-#+begin_src c
-main() {
-    float celsius, fahr;
-    float lower  = -20;
-    float upper  = 150;
-    float step = 10;
-
-    celsius = lower;
-    printf("%3s |%7s\n%s\n", "Cel", "Fahr", "-----------");
-    while (celsius < upper) {
-        fahr = 32.0 + celsius / (5.0/9.0);
-        printf("%3.0f |%6.1f\n", fahr, celsius);
-    }
-
-}
+#+begin_src C :tangle exercises/1-04.c
+  #include <stdio.h>
+  
+  main()
+  {
+      float celsius, fahr;
+      float lower  = 0;
+      float upper  = 300;
+      float step = 20;
+  
+      celsius = lower;
+      printf("%3s |%7s\n%s\n", "Fahr", "Cel", "-----------");
+  
+      while (celsius < upper)
+      {
+          fahr = 32.0 + celsius / (5.0 / 9.0);
+          printf("%3.0f |%6.1f\n", fahr, celsius);
+          celsius = celsius + 10.0;
+      }
+  }
 #+end_src
+
+#+results[aa6189172e403a67dd9a93f78e9cab20c46372e0]:
+#+begin_example
+Fahr |    Cel
+-----------
+ 32 |   0.0
+ 50 |  10.0
+ 68 |  20.0
+ 86 |  30.0
+104 |  40.0
+122 |  50.0
+140 |  60.0
+158 |  70.0
+176 |  80.0
+194 |  90.0
+212 | 100.0
+230 | 110.0
+248 | 120.0
+266 | 130.0
+284 | 140.0
+302 | 150.0
+320 | 160.0
+338 | 170.0
+356 | 180.0
+374 | 190.0
+392 | 200.0
+410 | 210.0
+428 | 220.0
+446 | 230.0
+464 | 240.0
+482 | 250.0
+500 | 260.0
+518 | 270.0
+536 | 280.0
+554 | 290.0
+#+end_example
 
 *** 1.3 The for statement
 **** Exercise1-5
@@ -185,16 +238,21 @@ main() {
 Modify the temperature conversion program to print the table in reverse order,
 that is, from 300 degrees to 0.
 
-#+begin_src c
-#include <stdio.h>
-main() {
-    int fahr;
-    for (fahr = 300; fahr >= 0; fahr = fahr - 20)
-        printf("%3d %6.1f\n", fahr, (5.0/9.0)*(fahr-32));
-}
+#+begin_src C :tangle exercises/1-05.c
+  #include <stdio.h>
+  
+  main()
+  {
+      int fahr;
+  
+      for (fahr = 300; fahr >= 0; fahr = fahr - 20)
+      {
+          printf("%3d %6.1f\n", fahr, (5.0/9.0)*(fahr-32));
+      }
+  }
 #+end_src
 
-#+results:
+#+results[25010d0e69a524a96076d75f5111a21c2b9eb8a4]:
 #+begin_example
 300  148.9
 280  137.8
@@ -218,8 +276,8 @@ main() {
 
 Simple pre-processor substitution.
 
-#+begin_src c :tangle no
-#define NAME replacement
+#+begin_src C :tangle no
+  #define NAME replacement
 #+end_src
 
 *** 1.5 Character Input and Output
@@ -231,54 +289,56 @@ values returned by =getchar()=
 
 Verify that the expression getchar() != EOF is 0 or 1.
 
-#+begin_src c
-#include <stdio.h>
-main () {
-    int test;
-    test = getchar() != EOF;
-    printf("%d", test);
-}
+#+begin_src C :tangle exercises/1-06.c
+  #include <stdio.h>
+  main ()
+  {
+      int test;
+      test = getchar() != EOF;
+      printf("%d", test);
+  }
 #+end_src
 
-#+results:
+#+results[e5e55962de371a5de1de0210afa8c741896c5972]:
 : 0
 
 **** Exercise1-7
 
 Write a program to print the value of EOF.
 
-#+begin_src c
-#include <stdio.h>
-
-main()
-{
-    printf("%d", EOF);
-}
+#+begin_src C :tangle exercises/1-07.c
+  #include <stdio.h>
+  main()
+  {
+      printf("%d", EOF);
+  }
 #+end_src
 
-#+results:
+#+results[dc353b4c7c625f781f4705b23518715faa73fa7f]:
 : -1
 
 **** Exercise1-8
 
 Write a program to count blanks, tabs, and newlines.
 
-#+begin_src c
-#include <stdio.h>
 
-main() {
-    int c;
-    long count = 0;
-
-    while ((c = getchar()) != EOF)
-        if (c == ' ' || c == '\t' || c == '\n')
-            ++count;
-
-    printf("%d\n", count);
-}
+#+begin_src C :tangle exercises/1-08.c
+  #include <stdio.h>
+  
+  main()
+  {
+      int c;
+      long count = 0;
+  
+      while ((c = getchar()) != EOF)
+          if (c == ' ' || c == '\t' || c == '\n')
+              ++count;
+  
+      printf("%d\n", count);
+  }
 #+end_src
 
-#+results:
+#+results[a010671338a20534db388d8ba3ed9e9fd4b18467]:
 : 0
 
 **** Exercise1-9
@@ -286,22 +346,23 @@ main() {
 Write a program to copy its input to its output, replacing each string of one or
 more blanks by a single blank.
 
-#+begin_src c
-#include <stdio.h>
-
-main() {
-    int c;
-    int cp; // previous value
-    int sp = '\ ';
-    while ((c = getchar()) != EOF) {
-        if (c == sp && cp == sp)
-            c = '';
-
-        putchar(c);
-        cp = c;
-    }
-    printf("\n");
-}
+#+begin_src C :tangle exercises/1-09.c
+  #include <stdio.h>
+  
+  main()
+  {
+      int c;
+      int cp; // previous value
+      int sp = '\ ';
+      while ((c = getchar()) != EOF) {
+          if (c == sp && cp == sp)
+              c = '';
+  
+          putchar(c);
+          cp = c;
+      }
+      printf("\n");
+  }
 #+end_src
 
 **** Exercise1-10
@@ -310,38 +371,45 @@ Write a program to copy its input to its output, replacing each tab by \t, each
 backspace by \b, and each backslash by \\. This makes tabs and backspaces
 visible in an unambiguous way.
 
-#+begin_src c
-#include <stdio.h>
-int c;
-main() {
-    while ((c = getchar()) != EOF) {
-        if (c == '\t' ||  c == '\b' || c == '\\')
-            putchar('\\');
-
-        putchar(c);
-    }
-    putchar('\n');
-}
+#+begin_src C :tangle exercises/1-10.c
+  #include <stdio.h>
+  int c;
+  
+  main() {
+      while ((c = getchar()) != EOF) {
+          if (c == '\t' ||  c == '\b' || c == '\\')
+              putchar('\\');
+  
+          putchar(c);
+      }
+      putchar('\n');
+  }
 #+end_src
 
 **** Exercise1-12
 
 Write a program that prints its input one word per line.
 
-#+begin_src c
-#include <stdio.h>
-main () {
-    int c;
-
-    while ((c = getchar()) != EOF) {
-        if (c == ' ' || c == '\t')
-            putchar('\n');
-        else
-            putchar(c);
-    }
-    putchar('\n');
-}
+#+begin_src fundamental :comments no :tangle exercises/1-12.input
+this is a single line input
 #+end_src
+
+#+begin_src C :tangle exercises/1-12.c :cat ~/Projects/knr/exercises/1-12.input
+  #include <stdio.h>
+  main () {
+      int c;
+  
+      while ((c = getchar()) != EOF) {
+          if (c == ' ' || c == '\t')
+              putchar('\n');
+          else
+              putchar(c);
+      }
+      putchar('\n');
+  }
+#+end_src
+
+#+results[3fe4f5aa413122b2376f22ed28f7e8385d86587f]:
 
 *** 1.6 Arrays
 **** Exercise1-13
@@ -350,157 +418,130 @@ Write a program to print a histogram of the lengths of words in its input. It is
 easy to draw the histogram with the bars horizontal; a vertical orientation is
 more challenging.
 
-#+begin_src c :feed a a a a aa aa aa aaa aaa aaa
-#include <stdio.h>
-#define TRUE 1
-#define FALSE 0
-#define MAXWORDLEN 15
-
-main() {
-    int occurences[MAXWORDLEN + 1];
-    int c, i, j;
-    int wl, omax = 0;
-    for (i = 0; i <= MAXWORDLEN; ++i) {
-        occurences[i] = 0;
-    }
-
-    int reached_eof = FALSE;
-    while(reached_eof == FALSE) {
-        c = getchar();
-        if (c != ' ' && c != '\t' && c != '\n' && c != EOF) { // start of a word
-            ++wl;
-        }
-        else {
-            if (wl > 0 && wl <= MAXWORDLEN ) {
-                ++occurences[wl];
-            }
-            else if (wl > MAXWORDLEN) {
-                ++occurences[MAXWORDLEN];
-            }
-            wl = 0;
-            if (c == EOF)
-                reached_eof = TRUE;
-        }
-    }
-
-    // Horizontal histogram
-    for (i = 1; i <= MAXWORDLEN; ++i) {
-        if (i != MAXWORDLEN)
-            printf("%3d ", i);
-        else
-            printf ("%2d+ ", i);
-
-        for (j = 1; j <= occurences[i]; ++j) {
-            putchar('*');
-        }
-        printf("\n");
-    }
-
-    printf("\n\n\n");
-
-    // Vertical histogram
-    // compute maximum number of occurences
-    for (i = 0; i <= MAXWORDLEN; i++) {
-        if (occurences[i] > omax)
-            omax = occurences[i];
-    }
-
-    for (i = omax; i >= 0; --i) { // column loop
-        for (j = 1; j <= MAXWORDLEN; ++j) { // line loop
-            if (i == 0) { // header
-                if (j != MAXWORDLEN)
-                    printf("%4d", j);
-                else
-                    printf ("%3d+", j);
-            }
-            else { // body
-                if (occurences[j] >= i)
-                    printf ("%4c", '*');
-                else
-                    printf ("%4c", ' ');
-            }
-        }
-        printf ("\n");
-    }
-
-}
+#+begin_src fundamental :comments no :tangle exercises/1-13.input
+a a a a aa aa aa aaa aaa aaa
 #+end_src
 
-#+results:
-#+begin_example
-  1 ****
-  2 ***
-  3 ***
-  4 
-  5 
-  6 
-  7 
-  8 
-  9 
- 10 
- 11 
- 12 
- 13 
- 14 
-15+ 
+#+begin_src C :dir ~/Projects/knr/exercises :tangle exercises/1-13.c :cat ~/Projects/knr/exercises/1-13.input
+  #include <stdio.h>
+  
+  #define TRUE 1
+  #define FALSE 0
+  #define MAXWORDLEN 15
+  
+  main()
+  {
+      int occurences[MAXWORDLEN + 1];
+      int c, i, j;
+      int wl, omax = 0;
+      // Initialization
+      for (i = 0; i <= MAXWORDLEN; ++i) {
+          occurences[i] = 0;
+      }
+  
+      int reached_eof = FALSE;
+      while(reached_eof == FALSE) {
+          c = getchar();
+          if (c != ' ' && c != '\t' && c != '\n' && c != EOF) {
+              ++wl;
+          }
+          else {
+              if (wl > 0 && wl <= MAXWORDLEN ) {
+                  ++occurences[wl];
+              }
+              else if (wl > MAXWORDLEN) {
+                  ++occurences[MAXWORDLEN];
+              }
+              wl = 0;
+              if (c == EOF)
+                  reached_eof = TRUE;
+          }
+      }
+  
+      // Horizontal histogram
+      for (i = 1; i <= MAXWORDLEN; ++i) {
+          if (i != MAXWORDLEN)
+              printf("%3d ", i);
+          else
+              printf ("%2d+ ", i);
+  
+          for (j = 1; j <= occurences[i]; ++j) {
+              putchar('*');
+          }
+          printf("\n");
+      }
+  
+      printf("\n\n\n");
+  
+      // Vertical histogram
+      // compute maximum number of occurences
+      for (i = 0; i <= MAXWORDLEN; i++) {
+          if (occurences[i] > omax)
+              omax = occurences[i];
+      }
+  
+      for (i = omax; i >= 0; --i) { // column loop
+          for (j = 1; j <= MAXWORDLEN; ++j) { // line loop
+              if (i == 0) { // header
+                  if (j != MAXWORDLEN)
+                      printf("%4d", j);
+                  else
+                      printf ("%3d+", j);
+              }
+              else { // body
+                  if (occurences[j] >= i)
+                      printf ("%4c", '*');
+                  else
+                      printf ("%4c", ' ');
+              }
+          }
+          printf ("\n");
+      }
+  }
+#+end_src
+
+#+results[8b62999d71bee19006788554fa9228fdb9330434]:
 
 
-
-   *                                                        
-   *   *   *                                                
-   *   *   *                                                
-   *   *   *                                                
-   1   2   3   4   5   6   7   8   9  10  11  12  13  14 15+
-#+end_example
 
 **** Exercise1-14
 
 Write a program to print a histogram of the frequencies of different
 characters in its input.
-
-#+begin_src c :feed 1 4 55 999 eee e hhh kkk j l ; pooop
-#include <stdio.h>
-#define ASCII 256 // Must say I'm not sure about this one !
-
-main() {
-  int characters[ASCII];
-  int c, i, j;
-
-  for (i = 0; i < ASCII; ++i)
-    characters[i] = 0;
-
-  while ((c = getchar()) != EOF) {
-    if (c != ' ' && c != '\n' && c != '\t')
-      ++characters[c];
-  }
-  for (i = 0; i < ASCII; ++i) {
-    c = characters[i];
-    if (c != 0) {
-      printf("%4c", i);
-      for (j = 0; j < c; ++j) {
-        printf("%3c", '*');
-      }
-      putchar('\n');
-    }
-  }
-}
+#+begin_src fundamental :comments no :tangle exercises/1-14.input
+1 4 55 999 eee e hhh kkk j l ; pooop
 #+end_src
 
-#+results:
-#+begin_example
-1  *
-   4  *
-   5  *  *
-   9  *  *  *
-   ;  *
-   e  *  *  *  *
-   h  *  *  *
-   j  *
-   k  *  *  *
-   l  *
-   o  *  *  *
-   p  *  *
-#+end_example
+#+begin_src C :tangle exercises/1-14.c :cmdline |  xargs cat /Users/julienfantin/Projects/knr/exercices/1-14.input
+  #include <stdio.h>
+  #define ASCII 256 // Must say I'm not sure about this one !
+  
+  main()
+  {
+      int characters[ASCII];
+      int c, i, j;
+  
+      for (i = 0; i < ASCII; ++i)
+          characters[i] = 0;
+  
+      while ((c = getchar()) != EOF) {
+          if (c != ' ' && c != '\n' && c != '\t')
+              ++characters[c];
+      }
+      for (i = 0; i < ASCII; ++i) {
+          c = characters[i];
+          if (c != 0) {
+              printf("%4c", i);
+              for (j = 0; j < c; ++j) {
+                  printf("%3c", '*');
+              }
+              putchar('\n');
+          }
+      }
+  }
+#+end_src
+
+#+results[907588f32a09bd686cff9873e5d007769ed71fc0]:
 
 *** 1.7 Functions
 **** Exercise1-15
@@ -508,111 +549,93 @@ main() {
 Rewrite the temperature conversion program of Section 1.2 to use a function for
 conversion.
 
-#+begin_src c
-#include <stdio.h>
-/* print Fahrenheit-Celsius table for fahr = 0, 20, ..., 300; floating-point version */
-float fahr_to_celsius(float fahr);
-
-main() {
-  float fahr, celsius; float lower, upper, step;
-  lower = 0; upper = 300; step = 20;
-  /* lower limit of temperatuire scale */ /* upper limit */ /* step size */
-  fahr = lower; while (fahr <= upper) {
-    celsius = fahr_to_celsius(fahr);
-    printf("%3.0f %6.1f\n", fahr, celsius);
-    fahr = fahr + step;
+#+begin_src C :tangle exercises/1-15.c
+  #include <stdio.h>
+  /* print Fahrenheit-Celsius table for fahr = 0, 20, ..., 300; floating-point version */
+  float fahr_to_celsius(float fahr);
+  
+  main() {
+    float fahr, celsius; float lower, upper, step;
+    lower = 0; upper = 300; step = 20;
+    /* lower limit of temperatuire scale */ /* upper limit */ /* step size */
+    fahr = lower; while (fahr <= upper) {
+      celsius = fahr_to_celsius(fahr);
+      printf("%3.0f %6.1f\n", fahr, celsius);
+      fahr = fahr + step;
+    }
   }
-}
-
-float fahr_to_celsius(float fahr) {
-  return (5.0/9.0) * (fahr-32.0); 
-}
+  
+  float fahr_to_celsius(float fahr) {
+    return (5.0/9.0) * (fahr-32.0);
+  }
 #+end_src
 
-#+results:
-#+begin_example
-0  -17.8
- 20   -6.7
- 40    4.4
- 60   15.6
-80   26.7
-100   37.8
-120   48.9
-140   60.0
-160   71.1
-180   82.2
-200   93.3
-220  104.4
-240  115.6
-260  126.7
-280  137.8
-300  148.9
-#+end_example
+#+results[bcff83d8f0206e6be26f7d9e792e651012c3fd09]:
 
 *** 1.8 Arguments - Call by Value
 
-*Only arrays arguments are passed by reference.*
-
+*Only arrays arguments are passed by reference*
+*** 1.9 Character Arrays
 **** Exercise1-16
 
 Revise the main routine of the longest-line program so it will
 correctly print the length of arbitrary long input lines, and as much
 as possible of the text.
 
-#+begin_src text
+#+begin_src fundamental :comments no :tangle exercises/1-16.input
 this is a short line
 this is a longer line
 this is a veeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeryyyy looooooooooooooooooooooooong line
 #+end_src
 
-#+begin_src c :feed-file ~/tmp/input_file.txt
-#include <stdio.h>
-
-#define MAXLINE 1000 /* maximum input line length */
-int getline(char line[]);
-void copy(char to[], char from[]);
-
-/* print the longest input line */
-main() {
-  int len, max;
-  char line[MAXLINE], longest[MAXLINE];
-
-  max = 0;
-  while ((len = getline(line)) > 0)
-    if (len > max) {
-      max = len;
-      copy(longest, line);
+#+begin_src C :tangle exercises/1-16.c
+  #include <stdio.h>
+  
+  #define MAXLINE 1000 /* maximum input line length */
+  int getline(char line[]);
+  void copy(char to[], char from[]);
+  
+  /* print the longest input line */
+  main() {
+    int len, max;
+    char line[MAXLINE], longest[MAXLINE];
+  
+    max = 0;
+    while ((len = getline(line)) > 0)
+      if (len > max) {
+        max = len;
+        copy(longest, line);
+      }
+    if(max>0) {
+      /*there was a line*/
+      printf("%d\n", max);
+      printf("%s", longest);
     }
-  if(max>0) {
-    /*there was a line*/
-    printf("%d\n", max);
-    printf("%s", longest);
+    return 0;
   }
-  return 0;
-}
-
-/* getline: read a line into s, return length */
-int getline(char s[]) {
-  int c, i;
-  i = 0;
-  while ((c=getchar())!=EOF && c!='\n') {
-    s[i] = c;
-    ++i;
+  
+  /* getline: read a line into s, return length */
+  int getline(char s[]) {
+    int c, i;
+    i = 0;
+    while ((c=getchar())!=EOF && c!='\n') {
+      s[i] = c;
+      ++i;
+    }
+    if (c == '\n') {
+      s[i] = c;
+      ++i;
+    }
+    s[i] = '\0';
+    return i;
   }
-  if (c == '\n') {
-    s[i] = c;
-    ++i;
+  
+  /* copy: copy 'from' into 'to'; assume to is big enough */
+  void copy(char to[], char from[]) {
+    int i;
+    i = 0; while ((to[i] = from[i]) != '\0')
+             ++i;
   }
-  s[i] = '\0';
-  return i;
-}
-
-/* copy: copy 'from' into 'to'; assume to is big enough */
-void copy(char to[], char from[]) {
-  int i;
-  i = 0; while ((to[i] = from[i]) != '\0')
-           ++i;
-}
 #+end_src
 
 #+results:
@@ -624,36 +647,36 @@ void copy(char to[], char from[]) {
 Write a program to print all input lines that are longer than 80
 characters.
 
-#+begin_src c :feed-file ~/tmp/input_file.txt
-#include <stdio.h>
-#define LINETHRESH 80
-
-int getline(char s[]);
-
-main() {
-  char line[1000];
-  int len;
-  while ((len = getline(line)) > 0) {
-    if (getline(line) > 80)
-      printf("%s", line);
+#+begin_src C :tangle exercises/1-17.input
+  #include <stdio.h>
+  #define LINETHRESH 80
+  
+  int getline(char s[]);
+  
+  main() {
+    char line[1000];
+    int len;
+    while ((len = getline(line)) > 0) {
+      if (getline(line) > 80)
+        printf("%s", line);
+    }
   }
-}
-
-int getline(char s[]) {
-  int c, i;
-  i = 0;
-  while ((c=getchar())!=EOF && c!='\n') {
-    s[i] = c;
-    ++i;
+  
+  int getline(char s[]) {
+    int c, i;
+    i = 0;
+    while ((c=getchar())!=EOF && c!='\n') {
+      s[i] = c;
+      ++i;
+    }
+    if (c == '\n') {
+      s[i] = c;
+      ++i;
+    }
+    s[i] = '\0';
+    return i;
   }
-  if (c == '\n') {
-    s[i] = c;
-    ++i;
-  }
-  s[i] = '\0';
-  return i;
-}
-
+  
 #+end_src
 
 #+results:
@@ -664,65 +687,65 @@ int getline(char s[]) {
 Write a program to remove trailing blanks and tabs from each line of input, and
 to delete entirely blank lines.
 
-#+begin_src text
-abcd e           
-j j     jk            
+#+begin_src fundamental :comments no :tangle exercises/1-18.input
+abcd e
+j j     jk
 
-lk l                            
-l  ;                            
+lk l
+l  ;
 #+end_src
 
-#+begin_src c :feed-file ~/tmp/input1-18.txt
-#include <stdio.h>
-#define MAXLINELEN 1000
-
-int getline(char s[]);
-void cleanprint(char s[]);
-
-main() {
-    char line[MAXLINELEN];
-    int len;
-    while ((len = getline(line)) > 0) {
-        cleanprint(line);
-    }
-}
-
-int getline(char s[]) {
-    int i, c;
-    i = 0;
-    while ((c = getchar()) != EOF && c != '\n') {
-        s[i] = c;
-        ++i;
-    }
-    if (c != EOF) {
-        s[i] = c;
-        ++i;
-    }
-    s[i] = '\0';
-    return i;
-}
-
-void cleanprint(char s[]){
-    int i;
-    // Do not print blank lines
-    if (s[0] == '\n')
-        return;
-
-    // Find the end of the string
-    for (i = 0; i < MAXLINELEN; ++i) {
-        if (s[i] == '\0') {
-            break;
-        }
-    }
-    // The test jumps over \n and \0 chars
-    while (s[i - 2] == ' ' || s[i - 2] == '\t') {
-        s[i - 2] = '\n';
-        s[i - 1] = '\0';
-        s[i] = NULL;
-        --i;
-    }
-    printf("%s", s);
-}
+#+begin_src C :tangle exercises/1-18.c
+  #include <stdio.h>
+  #define MAXLINELEN 1000
+  
+  int getline(char s[]);
+  void cleanprint(char s[]);
+  
+  main() {
+      char line[MAXLINELEN];
+      int len;
+      while ((len = getline(line)) > 0) {
+          cleanprint(line);
+      }
+  }
+  
+  int getline(char s[]) {
+      int i, c;
+      i = 0;
+      while ((c = getchar()) != EOF && c != '\n') {
+          s[i] = c;
+          ++i;
+      }
+      if (c != EOF) {
+          s[i] = c;
+          ++i;
+      }
+      s[i] = '\0';
+      return i;
+  }
+  
+  void cleanprint(char s[]){
+      int i;
+      // Do not print blank lines
+      if (s[0] == '\n')
+          return;
+  
+      // Find the end of the string
+      for (i = 0; i < MAXLINELEN; ++i) {
+          if (s[i] == '\0') {
+              break;
+          }
+      }
+      // The test jumps over \n and \0 chars
+      while (s[i - 2] == ' ' || s[i - 2] == '\t') {
+          s[i - 2] = '\n';
+          s[i - 1] = '\0';
+          s[i] = NULL;
+          --i;
+      }
+      printf("%s", s);
+  }
 #+end_src
 
 #+results:
@@ -734,7 +757,7 @@ void cleanprint(char s[]){
 **** Exercise1-19
 
 Write a function reverse(s) that reverses the character string s. Use it to write a program that reverses its input a line at a time.
-#+begin_src text
+#+begin_src fundamental :comments no :tangle exercises/1-19.input
 this
 is
 going
@@ -742,57 +765,53 @@ in
 reverse
 #+end_src
 
-#+begin_src c :feed-file ~/tmp/input1-19.txt
-#include <stdio.h>
-#define MAXLINELEN 1000
-
-int getline(char s[]);
-void reverse(char s[]);
-
-main() {
-    char line[MAXLINELEN];
-    int len = getline(line);
-    while ((len = getline(line)) > 0) {
-        reverse(line);
-        printf("%s", line);
-    }
-}
-
-int getline(char s[]) {
-   int c, i;
-    i = 0;
-    while ((c=getchar())!=EOF && c!='\n') {
-        s[i] = c;
-        ++i;
-    }
-    if (c == '\n') {
-        s[i] = c;
-        ++i;
-    }
-    s[i] = '\0';
-    return i;
-}
-
-void reverse(char s[]) {
-    char r[MAXLINELEN];
-    int i, line_end;
-    for (i = 0; i < MAXLINELEN; ++i) {
-        if (s[i] == '\0') {
-            line_end = i;
-            break;
-        }
-    }
-    // Skip end of line
-    if (line_end - 1 == '\n')
-        --line_end;
-    // Reverse characters in local char array
-    for (i = line_end - 1; i >= 0; --i) {
-        r[line_end - 1 - i] = s[i];
-    }
-    // Copy reversed chars to originalt array
-    for (i = 0; i < line_end; ++i)
-        s[i] = r[i];
-}
+#+begin_src C :tangle exercises/1-19.c
+  #include <stdio.h>
+  #define MAXLINELEN 1000
+  int getline(char s[]);
+  void reverse(char s[]);
+  main() {
+      char line[MAXLINELEN];
+      int len = getline(line);
+      while ((len = getline(line)) > 0) {
+          reverse(line);
+          printf("%s", line);
+      }
+  }
+  int getline(char s[]) {
+     int c, i;
+      i = 0;
+      while ((c=getchar())!=EOF && c!='\n') {
+          s[i] = c;
+          ++i;
+      }
+      if (c == '\n') {
+          s[i] = c;
+          ++i;
+      }
+      s[i] = '\0';
+      return i;
+  }
+  void reverse(char s[]) {
+      char r[MAXLINELEN];
+      int i, line_end;
+      for (i = 0; i < MAXLINELEN; ++i) {
+          if (s[i] == '\0') {
+              line_end = i;
+              break;
+          }
+      }
+      // Skip end of line
+      if (line_end - 1 == '\n')
+          --line_end;
+      // Reverse characters in local char array
+      for (i = line_end - 1; i >= 0; --i) {
+          r[line_end - 1 - i] = s[i];
+      }
+      // Copy reversed chars to originalt array
+      for (i = 0; i < line_end; ++i)
+          s[i] = r[i];
+  }
 #+end_src
 
 #+results:
@@ -801,38 +820,40 @@ void reverse(char s[]) {
 : gniog
 : ni
 : esrever
-
+*** 1.10 External Variables and Scope
 **** Exercise1-20
 
 Write a program /detab/ that replaces tabs in the input with the proper number of blanks to space to the next tab stop. Assume a fixed set of tab stops, say every n columns. Should n be a variable or a symbolic parameter?
 
 The number of tabstops should preferably be a variable, this will make it easier to evolve the program, like reading the actual number from an argument.
 
-#+begin_src text
+#+begin_src fundamental :comments no :tangle exercises/1-20.input
 e       e       e               e
-        k                       k
+                k         k
 #+end_src
 
 I'm not building much on what has been done before for this one, but it's easy enough not to warrant resorting to getline et al.
 
-#+begin_src c
-#include <stdio.h>
-
-int main(void) {
-    int c;
-    int i;
-    int n_tabs = 4;
-    while ((c = getchar()) != EOF) {
-        if (c == '\t') {
-            for (i = 0; i < n_tabs; ++i) {
-                putchar(' ');
-            }
-        } else {
-            putchar(c);
-        }
-    }
-    return 0;
-}
+#+begin_src C :tangle exercises/1-20.c
+  #include <stdio.h>
+  
+  int main(void) {
+  
+      int c;
+      int i;
+      int n_tabs = 4;
+  
+      while ((c = getchar()) != EOF) {
+          if (c == '\t') {
+              for (i = 0; i < n_tabs; ++i) {
+                  putchar(' ');
+              }
+          } else {
+              putchar(c);
+          }
+      }
+      return 0;
+  }
 #+end_src
 
 #+results:
@@ -846,90 +867,195 @@ tabs and blanks to achieve the same spacing. Use the same tab stops as for
 detab. When either a tab or a single blank would suffice to reach a tab stop,
 which should be given preference?
 
-#+begin_src text
-e   e        e       e  e e           e
+#+begin_src fundamental :comments no :tangle exercises/1-21.input
+e   e        e       e  e e              e
 k  k k    k      k                 k   k
 #+end_src
 
-#+begin_src c
-#include <stdio.h>
-#define MAXLINE 1000
-
-int getline(char s[]);
-void entab(char s[], int tab_size);
-
-int main(void) {
-    char line[MAXLINE];
-    int len;
-    int tab_size = 4;
-    while ((len = getline(line)) > 0) {
-        entab(line, tab_size);
-        printf("%s", line);
-    }
-}
-
-int getline(char s[]) {
-    int c, i;
-    i = 0;
-    while ((c=getchar())!=EOF && c!='\n') {
-        s[i] = c;
-        ++i;
-    }
-    if (c == '\n') {
-        s[i] = c;
-        ++i;
-    }
-    s[i] = '\0';
-    return i;
-}
-
-void entab(char s[], int tab_size) {
-    char line[MAXLINE];
-    int offset, blanks, tabs = 0;
-    int i, j;
-    for (i = 0; i < MAXLINE; ++i) {
-        if (s[i] == ' ') {
-            blanks = 1;
-            // count number of successive blanks
-            while (s[i + blanks] == ' ') {
-                ++blanks;
-            }
-            // when we have more blanks than a tabstop's worth
-            if (blanks >= tab_size) {
-                tabs = blanks / tab_size;
-                blanks = blanks  - (tabs * tab_size);
-                for (j = 0; j < tabs; ++j) {
-                    line[i + j] = '\t';
-                    offset = offset + 3;
-                }
-            }
-            for (j = 0; j < blanks; ++j) {
-                line[i + j +  (offset / 3)] = ' ';
-            }
-            i = i + (tabs * tab_size) +  (blanks - 1);
-
-        } else if (s[i] == '\0') {
-            for (j = 0; j < MAXLINE; ++j) {
-                s[j] = line[j];
-            }
-            return;
-        } else {
-            line[i - offset] = s[i];
-        }
-    }
-}
+#+begin_src C :tangle exercises/1-21.c :cat exercises/1-21.input
+  #include <stdio.h>
+  
+  #define MAX_LINE_LENGTH 1000
+  #define TAB_SIZE 4
+  
+  int my_getline(char s[]);
+  void entab(char s[], int tab_size);
+  
+  int main(void) {
+  
+      char line[MAX_LINE_LENGTH];
+      int len;
+  
+      while ((len = my_getline(line)) > 0) {
+          entab(line, TAB_SIZE);
+          printf("%s", line);
+      }
+  }
+  
+  int my_getline(char s[]) {
+  
+      int c, i = 0;
+  
+      while ((c=getchar())!=EOF) {
+          s[i] = c;
+          ++i;
+  
+          if (c == '\n') break;
+      }
+  
+      s[i] = '\0';
+  
+      return i;
+  }
+  
+  void entab(char s[], int tab_size) {
+  
+      int offset, tabs = 0;
+  
+      for (int i = 0; i < MAX_LINE_LENGTH; ++i) {
+  
+          int this_char = s[i];
+  
+          if (this_char == ' ') {
+              ++offset;
+  
+              if (offset % tab_size == 0) {
+                  ++tabs;
+                  this_char = '\t';
+              }
+          }
+          else {
+              if (offset) offset = 0;
+          }
+  
+          s[i - tabs * (tab_size - 1)] = this_char;
+  
+          if (s[i] == '\0') {
+              return;
+          }
+      }
+  }
 #+end_src
 
-#+results:
-: e   e         ek  k k    k      k                 k   k
+#+results[c0184cc6a71f0a449516447a81b54fed81e1bfc9]:
+: e   e         e          e  e e                         e
+: k  k k        k         k                              k   k
+
+**** Exercise1-22
+
+Write a program to ``fold'' long input lines into two or more shorter
+lines after the last non-blank character that occurs before the n-th
+column of input. Make sure your program does something intelligent
+with very long lines, and if there are no blanks or tabs before the
+specified column.
+
+#+begin_src fundamental :comments no :tangle exercises/1-22.input
+Write a program to ``fold'' long input lines into two or more shorter
+lines after the last non-blank character that occurs before the n-th
+column of input. 
+Make sure your program does something intelligent with very long lines very long lines very long lines very long lines.
+AndIfThereAreNoBlanksOrTabsBeforeTheSpecifiedColumn.
+#+end_src
+
+#+begin_src C :tangle exercises/1-22.c :cat exercises/1-22.input
+  #include <stdio.h>
+  
+  #define MAX_LINE_LENGTH 10000
+  #define MAX_COLUMN 20
+  
+  int my_getline(char line[]);
+  void fold(char line[], int length, int column);
+  
+  
+  int main()
+  {
+      char line[MAX_LINE_LENGTH];
+      int i, len = 0;
+  
+      while ((len = my_getline(line))) {
+          fold(line, len, MAX_COLUMN);
+          printf("%s", line);
+      }
+  
+      return 0;
+  }
+  
+  int my_getline(char line[])
+  {
+      int c, i = 0;
+  
+      while ((c = getchar()) != EOF) {
+          line[i] = c;
+          i++;
+  
+          if (c == '\n') 
+              break;
+      }
+  
+      line[i] = '\0';
+  
+      return i;
+  }
+  
+  void fold(char line[], int length, int column)
+  {
+      int i, last_blank = 0;
+      
+      for (i = 1; i < length; i++) {
+    
+          if (line[i] == ' ')
+              last_blank = i;
+           
+          if (i % column == 0)  {
+              // No blanks before column: word-wrap
+              if (last_blank == 0) {
+                  int j = length;
+                  for (j; j >= i; j--) {
+                      line[j+2] = line[j];
+                  }
+  
+                  line[i] = '-';
+                  line[i + 1] = '\n';
+                  length += 2;
+              }
+              else {
+                  line[last_blank] = '\n';
+              }
+          }
+      }
+  }
+#+end_src
+
+#+results[7c3d43e1f3b68b529b8a838fb11220880a1955b2]:
+#+begin_example
+Write a program to
+``fold'' long input
+lines into two or
+more shorter
+lines after the last
+non-blank character
+that occurs before
+the n-th
+column of input. 
+Make sure your
+program does something
+intelligent with very
+long lines very long
+lines very long
+lines very long lines.
+AndIfThereAreNoBlank-
+sOrTabsBeforeTheSp-
+ecifiedColumn.
+#+end_example
 
 * Review
-** K.W.L.
+** TODO Import notes from the pdf
+** TODO K.W.L.
 *** What I knew
 - Control Flow
 - Syntax
 *** What I wanted to know
 - Pointers
 - Data Structures
-- io
+- I/O
 *** TODO What I learned

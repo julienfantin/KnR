@@ -1,71 +1,4 @@
-#+title: The C programming language, aka K&R
-
-
-* Prerequisites
-** Redefined =org-babel-C-execute=
-
-In order to feed raw text to the blocks STDIN while they are executed,
-*a new header argument :cat is defined*.
-
-Its purpose is to provide a relative path to a text file, whose
-contents will be piped into the src block's executable when at
-runtime.
-
-#+begin_src emacs-lisp
-  (defun org-babel-C-execute (body params)
-    "This function should only be called by `org-babel-execute:C'
-  or `org-babel-execute:C++'."
-    (let* ((tmp-src-file (org-babel-temp-file
-                          "C-src-"
-                          (cond
-                           ((equal org-babel-c-variant 'c) ".c")
-                           ((equal org-babel-c-variant 'cpp) ".cpp"))))
-           (tmp-bin-file (org-babel-temp-file "C-bin-"))
-  ;; +
-           (cat (cdr (assoc :cat params)))
-           (cmdline (cdr (assoc :cmdline params)))
-           (flags (cdr (assoc :flags params)))
-           (full-body (org-babel-C-expand body params))
-           (compile
-            (progn
-              (with-temp-file tmp-src-file (insert full-body))
-              (org-babel-eval
-               (format "%s -o %s %s %s"
-                       (cond
-                        ((equal org-babel-c-variant 'c) org-babel-C-compiler)
-                        ((equal org-babel-c-variant 'cpp) org-babel-C++-compiler))
-                       (org-babel-process-file-name tmp-bin-file)
-                       (mapconcat 'identity
-                                  (if (listp flags) flags (list flags)) " ")
-                       (org-babel-process-file-name tmp-src-file)) ""))))
-      ((lambda (results)
-         (org-babel-reassemble-table
-          (if (member "vector" (cdr (assoc :result-params params)))
-              (let ((tmp-file (org-babel-temp-file "c-")))
-                (with-temp-file tmp-file (insert results))
-                (org-babel-import-elisp-from-file tmp-file))
-            (org-babel-read results))
-          (org-babel-pick-name
-           (cdr (assoc :colname-names params)) (cdr (assoc :colnames params)))
-          (org-babel-pick-name
-           (cdr (assoc :rowname-names params)) (cdr (assoc :rownames params)))))
-       (org-babel-trim
-  ;; +++
-        (org-babel-eval (concat (if cat (concat "cat " cat " | " ) "")
-                                tmp-bin-file
-                                (if cmdline (concat " " cmdline) ""))
-                        "")))))
-  
-  (org-babel-do-load-languages
-   'org-babel-load-languages
-   '((emacs-lisp . t)
-     (C . t)))
-  
-  ;; Convenience settings
-  ;;
-  (setq org-confirm-babel-evaluate nil)
-  (define-key c-mode-map (kbd "C-c C-v") 'org-babel-detangle)
-#+end_src
+#+title:K&R
 
 * Chapters
 #+Properties: :mkdirp yes
@@ -1048,14 +981,4 @@ sOrTabsBeforeTheSp-
 ecifiedColumn.
 #+end_example
 
-* Review
-** TODO Import notes from the pdf
-** TODO K.W.L.
-*** What I knew
-- Control Flow
-- Syntax
-*** What I wanted to know
-- Pointers
-- Data Structures
-- I/O
-*** TODO What I learned
+

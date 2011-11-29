@@ -1,5 +1,8 @@
 #+title: The C programming language, aka K&R
 
+Just working through the book's exercices, using emacs and org-mode's
+literate programming package org-babel.
+
 * Org-babel prerequisites
 ** Redefined =org-babel-C-execute=
 

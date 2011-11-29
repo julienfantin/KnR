@@ -23,7 +23,7 @@ runtime.
                            ((equal org-babel-c-variant 'c) ".c")
                            ((equal org-babel-c-variant 'cpp) ".cpp"))))
            (tmp-bin-file (org-babel-temp-file "C-bin-"))
-  ;; +
+           ;; +
            (cat (cdr (assoc :cat params)))
            (cmdline (cdr (assoc :cmdline params)))
            (flags (cdr (assoc :flags params)))
@@ -52,11 +52,14 @@ runtime.
           (org-babel-pick-name
            (cdr (assoc :rowname-names params)) (cdr (assoc :rownames params)))))
        (org-babel-trim
-  ;; +++
+        ;; +
         (org-babel-eval (concat (if cat (concat "cat " cat " | " ) "")
                                 tmp-bin-file
                                 (if cmdline (concat " " cmdline) ""))
                         "")))))
+  
+  (setq c-default-style "k&r"
+        c-basic-offset 4)
   
   (org-babel-do-load-languages
    'org-babel-load-languages

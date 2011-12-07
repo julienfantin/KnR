@@ -981,4 +981,63 @@ sOrTabsBeforeTheSp-
 ecifiedColumn.
 #+end_example
 
+**** TODO Exercise1-23
+Write a program to remove all comments from a C program. Don't forget
+to handle quoted strings and character constants properly. C comments
+don't nest.
 
+**** TODO Exercise1-24
+Write a program to check a C program for rudimentary syntax errors
+like unmatched parentheses, brackets and braces. Don't forget about
+quotes, both single and double, escape sequences, and comments. (This
+program is hard if you do it in full generality.)
+
+** Chapter 2 - Types, Operators and Expressions
+*** 2.1 Variable Names
+*** 2.2 Data Types and Sizes
+**** Exercise 2-1
+Write a program to determine the ranges of char, short, int, and long
+variables, both signed and unsigned, by printing appropriate values
+from standard headers and by direct computation. Harder if you compute
+them: determine the ranges of the various floating-point types.
+
+#+begin_src C
+  #include <stdio.h>
+  #include <limits.h>
+  #include <float.h>
+  
+  
+  int main ()
+  {
+      printf ("char goes from %i to %i, range is %d\n", CHAR_MIN, CHAR_MAX, UCHAR_MAX);
+      printf ("short goes from %i to %i, range is %d\n", SHRT_MIN, SHRT_MAX, USHRT_MAX);
+      printf ("int goes from %i to %i, range is %D\n", INT_MIN, INT_MAX, UINT_MAX);
+      printf ("long goes from %ld to %ld, range is %U\n", LONG_MIN, LONG_MAX, ULONG_MAX);
+  
+      return 0;
+  }
+#+end_src
+
+#+results[ae7ea23e6b6506f1672b04d794ac95d805fe5164]:
+: char goes from -128 to 127, range is 255
+: short goes from -32768 to 32767, range is 65535
+: int goes from -2147483648 to 2147483647, range is 4294967295
+: long goes from -9223372036854775808 to 9223372036854775807, range is 18446744073709551615
+
+*** 2.6 Relational and logical operators
+**** Exercise 2-2
+#+begin_example
+for (i=0; i < lim-1 && (c=getchar()) != '\n' && c != EOF; ++i)
+    s[i] = c;
+#+end_example
+Write a loop equivalent to the for loop above without using && or ||.
+
+#+begin_src C
+  for (i=0; i < lim-1; ++i) {
+      if ((c=getchar()) != '\n') {
+          if (c != EOF) {
+              s[i] = c;
+          }
+      }
+  }
+#+end_src

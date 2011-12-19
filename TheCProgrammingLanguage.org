@@ -1032,7 +1032,7 @@ for (i=0; i < lim-1 && (c=getchar()) != '\n' && c != EOF; ++i)
 #+end_example
 Write a loop equivalent to the for loop above without using && or ||.
 
-#+begin_src C
+#+begin_src C :tangle no :eval never
   for (i=0; i < lim-1; ++i) {
       if ((c=getchar()) != '\n') {
           if (c != EOF) {
@@ -1041,3 +1041,91 @@ Write a loop equivalent to the for loop above without using && or ||.
       }
   }
 #+end_src
+
+*** 2.7 Type conversions
+
+**** Exercise 2-3
+
+Write a function htoi(s), which converts a string of hexadecimal digits
+(including an optional 0x or 0X) into its equivalent integer value. The
+allowable digits are 0 through 9, a through f, and A through F.
+
+#+begin_src fundamental :comments no :tangle exercises/2-3.input
+  0xffffee
+  0XFFfFEe
+  0C0e0F
+  77ac6f
+  9a9A9a
+  000001
+#+end_src
+
+#+begin_src C :tangle exercises/2-3.c :cat exercises/2-3.input
+  #include <stdio.h>
+  #include <ctype.h>
+  
+  int my_getline(char s[]);
+  void htoi(char s[]);
+  int _htoi(char h);
+  
+  int my_getline(char s[]) {
+      
+      int c, i = 0;
+      
+      while ((c=getchar())!=EOF) {
+          s[i] = c;
+          ++i;
+          
+          if (c == '\n') break;
+      }
+      
+      s[i] = '\0';
+      
+      return i;
+  }
+  
+  void htoi(char s[])
+  {
+      int i = 0;
+      
+      if (s[i] == '0' && tolower(s[i+1]) == 'x') {
+          i = 2;
+      }
+    
+      for (i; s[i] != '\0'; i++) {
+          printf ("%i", _htoi(tolower(s[i])));
+      }
+      putchar('\n');
+  }
+  
+  int _htoi (char h)
+  {
+      if (h == '\n') {
+          return 0;
+      }
+  
+      if (isdigit (h)) {
+          return h - '0';
+      }
+      
+      return 10 + h - 'a';
+  }
+  
+  int main()
+  {
+      char line[1000];
+      
+      while (my_getline(line)) {
+          htoi (line);
+      }
+  
+  }
+#+end_src
+
+#+results[5a944d5dca7eaebb1033c74dae179ef0fb37a667]:
+: 1515151514140
+: 1515151514140
+: 0120140150
+: 7710126150
+: 9109109100
+: 0000010
+
